@@ -20,3 +20,7 @@ To install the nav command:
 ```bash
 sudo ./install.sh 
 ```
+
+### Demo
+
+[Screencast from 2024-11-14 19-06-30.webm](https://github.com/user-attachments/assets/f78c3109-d3d4-454a-a3a0-64478a17dadf)
