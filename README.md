@@ -1,7 +1,9 @@
 ###  Description 
 
-Shell utility to navigate through directories.
-Note: This works only on bash right now.
+Shell utility to navigate through directories.\
+Notes:\
+This works only on bash right now.\
+Still unusable under the root user\
 It uses fzf to search a directory to cd to.
 nav is actually an alias in `~/.bashrc`
 
@@ -12,7 +14,7 @@ Make sure to install the dependency fzf
 On Debian Based:
 
 ```bash
-sudo apt install fzf
+sudo apt install fzf gcc
 ```
 
 To install the nav command:
