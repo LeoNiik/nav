@@ -8,9 +8,20 @@
 #include <linux/stat.h>
 #include <dirent.h>
 #include <sys/wait.h>
+#include <argp.h>
+#include <stdbool.h>
+#include <linux/limits.h>
 
-#define MAX_LENGTH 1024
 
+//what is the max limit of paths in linux?
+//what is the max limit of paths in windows?
+
+
+
+const char *argp_program_version = "1.0";
+const char *argp_program_bug_address = "leonardonicoletta32@gmail.com";
+static char doc[] = "Shell utility to navigate through directories";
+static char args_doc[] = "";
 
 typedef struct {
     char **items;
@@ -34,8 +45,6 @@ void initDA(DA *da){
 }
 
 
-
-
 //function to append a string to the dynamic array
 int isDir(const char *path) {
     struct stat statbuf;
@@ -54,34 +63,52 @@ int isDir(const char *path) {
     }
 }
 
-int main(int argc , char ** argv){
-    char *path = getenv("HOME");
+
+
+static struct argp_option options[] = { 
     
-    char *fzfquery = NULL;
-    if (argc > 1) {
-        for (int i = 1; i < argc; i++) {
-            if (strcmp(argv[i], "-h") == 0) {
-                printf("Usage: %s [-p path] [fzfquery]\n", argv[0]);
-                printf("path is the path from where the search starts\nDefault is home folder", argv[0]);
-                return 0;
-            } else if (strcmp(argv[i], "-p") == 0 && i + 1 < argc) {
-                strcpy(path, argv[++i]);
-                if(isDir(path) != 1){
-                    printf("The path is not a valid directory\n");
-                    return -1;
-                }
-            } else {
-                fzfquery = malloc(strlen(argv[i]) + 1);
-                strncpy(fzfquery, argv[i], strlen(argv[i]) + 1);
-            }
-        }
-    }
+    { "path", 'p', "PATH", 0, "searches from the specified path (default $HOME)"},
+    { "query", 'q', "QUERY", 0, "Inputs the query in the fzf search"},    
+    { 0 } 
+};
+
+struct arguments
+{
+	char *query;                /* table name and input file*/
+	char *path;
+};
+
+static error_t parse_opt(int key, char *arg, struct argp_state *state) {
+    struct arguments *arguments = state->input;
+    switch (key) {
+    case 'p': arguments->path = arg; break;
+    case 'q': arguments->query = arg; break;
+    case ARGP_KEY_ARG: return 0;
+    default: return ARGP_ERR_UNKNOWN;
+    }   
+    return 0;
+}
+
+static struct argp argp = { options, parse_opt, args_doc, doc, 0, 0, 0 };
+
+
+int main(int argc , char ** argv){
+
+    //professional input argument parser
+    struct arguments arguments;
+
+    arguments.query = NULL;
+    arguments.path = getenv("HOME");
+
+
+    argp_parse(&argp, argc, argv, 0, 0, &arguments);
+    
+
 
     DA fzfargs;
     initDA(&fzfargs);
-    appendDA(&fzfargs, path);    
+    appendDA(&fzfargs, arguments.path);    
     
-
 
     
     
@@ -98,34 +125,43 @@ int main(int argc , char ** argv){
     }
 
     if (pid == 0) { // Child process
-        // Close the read end of the pipe
-        close(pipefd[0]);
 
-        // Redirect stdout to the write end of the pipe
+        close(pipefd[0]);
         dup2(pipefd[1], STDOUT_FILENO);
 
+
         // Read and write data
-        readSubTree(path, &fzfargs);
-        for (int i = 0; i < fzfargs.size; i++) {
-            write(STDOUT_FILENO, fzfargs.items[i], strlen(fzfargs.items[i]));
-            write(STDOUT_FILENO, "\n", 1); // Add newline between items
+        readSubTree(arguments.path, &fzfargs);
+
+        //put all the in items in a single string
+        char *allPaths = malloc(fzfargs.size * PATH_MAX);
+
+        for(int i = 0; i < fzfargs.size; i++){
+            strcat(allPaths, fzfargs.items[i]);
+            strcat(allPaths, "\n");
         }
 
+        write(pipefd[1], allPaths, strlen(allPaths));
+        if (write(pipefd[1], "\0", 1) < 0) {
+            perror("write");
+            return -1;
+        }
+
+
         close(pipefd[1]); // Close the write end of the pipe
-        printf("Child process finished\n");
         exit(EXIT_SUCCESS);
 
     } else { // Parent process
+        
         // Close the write end of the pipe
         close(pipefd[1]);
-
         // Redirect stdin to the read end of the pipe
         dup2(pipefd[0], STDIN_FILENO);
+
             
         int status;
 
-        usleep(5000);
-        if(waitpid(pid, &status, WNOHANG) < 0){
+        while (waitpid(pid, &status, WNOHANG) < 0) {
             perror("waitpid");
             return -1;
         }
@@ -135,9 +171,9 @@ int main(int argc , char ** argv){
         }
         
         // Execute `fzf`, reading from stdin
-        if (fzfquery != NULL) {
-
-            execlp("fzf", "fzf", "-q", fzfquery, (char *)NULL);
+        if (arguments.query != NULL) {
+            
+            execlp("fzf", "fzf", "-q", arguments.query, (char *)NULL);
         }
         execlp("fzf", "fzf", (char *)NULL);
 
@@ -150,7 +186,7 @@ int main(int argc , char ** argv){
 
 int readSubTree(char* path, DA *da){
     DIR * currdir;
-    char buf[MAX_LENGTH];
+    char buf[PATH_MAX];
 
     if((currdir = opendir(path)) == NULL){
         
@@ -173,7 +209,7 @@ int readSubTree(char* path, DA *da){
             continue;
         }
         
-        char newPath[MAX_LENGTH] = {0};
+        char newPath[PATH_MAX] = {0};
 
         snprintf(newPath, sizeof(newPath), "%s/%s", path, entry->d_name);
         if ((isDir(newPath) == 1)) {
