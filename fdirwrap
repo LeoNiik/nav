@@ -1,3 +1,11 @@
 #!/bin/bash
 
-cd $(fdir $@)
+# If --help or -? is passed, directly invoke fdir with the arguments and exit
+if [[ "$@" == *"--help"* || "$@" == *"-?"* ]]; then
+    fdir "$@"
+else
+	dir=$(fdir $@)
+	echo $dir
+	cd $dir 2>/dev/null
+fi
+	

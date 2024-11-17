@@ -3,10 +3,10 @@
 Shell utility to navigate through directories.\
 Notes:\
 This works only on bash right now.\
-Still unusable under the root user\
+Still unusable under the root user.\
 It uses fzf to search a directory to cd to.
-nav is actually an alias in `~/.bashrc`
-
+nav is actually an alias in `~/.bashrc`.
+To avoid bugs execute the `sudo ./install.sh` with the user you want the command for.
 ### Install
 
 Make sure to install the dependency fzf
