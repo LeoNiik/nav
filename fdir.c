@@ -14,35 +14,15 @@
 
 
 //what is the max limit of paths in linux?
-//what is the max limit of paths in windows?
-
-
 
 const char *argp_program_version = "1.0";
 const char *argp_program_bug_address = "leonardonicoletta32@gmail.com";
 static char doc[] = "Shell utility to navigate through directories";
 static char args_doc[] = "";
 
-typedef struct {
-    char **items;
-    int size;
-    int capacity;
-} DA;
+int readSubTree(char* path);
 
-int readSubTree(char* path, DA *da);
-
-void printFileInfo(const char* path, const struct dirent* entry);
 int isDir(const char *);
-void initDA(DA *da);
-void appendDA(DA *da, char *item);
-
-
-
-void initDA(DA *da){
-    da->size = 0;
-    da->capacity = 1;
-    da->items = malloc(sizeof(char *));
-}
 
 
 //function to append a string to the dynamic array
@@ -102,15 +82,7 @@ int main(int argc , char ** argv){
 
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
-    
-
-
-    DA fzfargs;
-    initDA(&fzfargs);
-    appendDA(&fzfargs, arguments.path);    
-    
-
-    
+       
     
     int pipefd[2];
     if(pipe(pipefd) < 0){
@@ -125,29 +97,18 @@ int main(int argc , char ** argv){
     }
 
     if (pid == 0) { // Child process
-
         close(pipefd[0]);
         dup2(pipefd[1], STDOUT_FILENO);
 
-
         // Read and write data
-        readSubTree(arguments.path, &fzfargs);
-
-        //put all the in items in a single string
-        char *allPaths = malloc(fzfargs.size * PATH_MAX);
-
-        for(int i = 0; i < fzfargs.size; i++){
-            strcat(allPaths, fzfargs.items[i]);
-            strcat(allPaths, "\n");
+        if(access(arguments.path, R_OK) == F_OK){
+            readSubTree(arguments.path);
+            printf("%s\n", arguments.path);
+        }else{
+            perror("specified path is not readable by this user");
         }
-
-        write(pipefd[1], allPaths, strlen(allPaths));
-        if (write(pipefd[1], "\0", 1) < 0) {
-            perror("write");
-            return -1;
-        }
-
-
+        usleep(500);
+        
         close(pipefd[1]); // Close the write end of the pipe
         exit(EXIT_SUCCESS);
 
@@ -157,19 +118,7 @@ int main(int argc , char ** argv){
         close(pipefd[1]);
         // Redirect stdin to the read end of the pipe
         dup2(pipefd[0], STDIN_FILENO);
-
             
-        int status;
-
-        while (waitpid(pid, &status, WNOHANG) < 0) {
-            perror("waitpid");
-            return -1;
-        }
-
-        if (WIFEXITED(status) && WEXITSTATUS(status) != EXIT_SUCCESS) {
-            exit(EXIT_FAILURE);
-        }
-        
         // Execute `fzf`, reading from stdin
         if (arguments.query != NULL) {
             
@@ -184,12 +133,11 @@ int main(int argc , char ** argv){
     return 0; 
 }
 
-int readSubTree(char* path, DA *da){
+int readSubTree(char* path){
     DIR * currdir;
     char buf[PATH_MAX];
 
     if((currdir = opendir(path)) == NULL){
-        
         perror("opendir");
         exit(EXIT_FAILURE);
     }
@@ -214,10 +162,12 @@ int readSubTree(char* path, DA *da){
         snprintf(newPath, sizeof(newPath), "%s/%s", path, entry->d_name);
         if ((isDir(newPath) == 1)) {
             //if it is a directory print it to the stdout
-            readSubTree(newPath, da);
-            char *newPathCopy = strdup(newPath);
-            appendDA(da, newPathCopy);
 
+            //check if the dir is readable for current user
+            if(access(newPath, R_OK) == F_OK){
+                readSubTree(newPath);
+                printf("%s\n", newPath);
+            }
         }
     }
     closedir(currdir);
@@ -225,12 +175,5 @@ int readSubTree(char* path, DA *da){
 
 }
 
-void appendDA(DA *da, char *item){
-    if(da->size == da->capacity){
-        da->capacity *= 2;
-        da->items = realloc(da->items, da->capacity * sizeof(char *));
-    }
-    da->items[da->size++] = item;
-}
 
 
